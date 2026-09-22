@@ -42,6 +42,52 @@ export default function AdminDashboardClient() {
   const [correctionRequests, setCorrectionRequests] = useState<any[]>([]);
   const [summary, setSummary] = useState<{ byStatus: Record<string, number>; byEmployee: any[] } | null>(null);
   const [exportMonth, setExportMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [galleryPhotos, setGalleryPhotos] = useState<any[]>([]);
+  const [galleryFile, setGalleryFile] = useState<File | null>(null);
+  const [galleryCaption, setGalleryCaption] = useState("");
+  const [galleryCategory, setGalleryCategory] = useState("Field Survey");
+  const [galleryFeature, setGalleryFeature] = useState(false);
+  const [galleryUploading, setGalleryUploading] = useState(false);
+
+  async function loadGallery() {
+    const res = await fetch("/api/admin/gallery");
+    const data = await res.json();
+    setGalleryPhotos(data.photos ?? []);
+  }
+
+  async function uploadGalleryPhoto(e: React.FormEvent) {
+    e.preventDefault();
+    if (!galleryFile || !galleryCaption) return;
+    setGalleryUploading(true);
+    try {
+      const uploadData = new FormData();
+      uploadData.append("file", galleryFile);
+      uploadData.append("folder", "gallery");
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: uploadData });
+      const uploadJson = await uploadRes.json();
+      if (!uploadRes.ok) {
+        alert(uploadJson.error ?? "Photo upload failed");
+        return;
+      }
+      await fetch("/api/admin/gallery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: uploadJson.url, caption: galleryCaption, category: galleryCategory, isPhotoOfTheWeek: galleryFeature }),
+      });
+      setGalleryFile(null);
+      setGalleryCaption("");
+      setGalleryFeature(false);
+      loadGallery();
+    } finally {
+      setGalleryUploading(false);
+    }
+  }
+
+  async function deleteGalleryPhoto(id: string) {
+    if (!confirm("Remove this photo?")) return;
+    await fetch(`/api/admin/gallery/${id}`, { method: "DELETE" });
+    loadGallery();
+  }
 
   async function loadRequests() {
     const [lr, cr, sm] = await Promise.all([
@@ -108,6 +154,7 @@ export default function AdminDashboardClient() {
     loadEmployees();
     loadHolidays();
     loadRequests();
+    loadGallery();
   }, []);
 
   async function handleCreate(e: React.FormEvent) {
@@ -386,6 +433,64 @@ export default function AdminDashboardClient() {
             <div className="flex gap-2">
               <button onClick={() => decideCorrection(r.id, "APPROVED")} className="px-3 py-1.5 rounded-sm text-xs font-medium" style={{ background: "#2FA89322", color: "#2FA893" }}>Approve</button>
               <button onClick={() => decideCorrection(r.id, "REJECTED")} className="px-3 py-1.5 rounded-sm text-xs font-medium" style={{ background: "#E1553F22", color: "#E1553F" }}>Reject</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <h1 className="text-2xl font-bold mt-12 mb-6" style={{ color: "#14181C" }}>Gallery</h1>
+      <p className="text-sm text-gray-500 mb-4">
+        Upload from your laptop or phone — on mobile this also lets you take a photo directly.
+      </p>
+      <form onSubmit={uploadGalleryPhoto} className="p-6 rounded-lg mb-8 space-y-3" style={{ background: "#fff" }}>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setGalleryFile(e.target.files?.[0] ?? null)}
+          className="block text-sm"
+        />
+        <input
+          placeholder="Photo description"
+          value={galleryCaption}
+          onChange={(e) => setGalleryCaption(e.target.value)}
+          className="w-full border px-3 py-2 rounded-sm text-sm"
+        />
+        <div className="flex gap-3 flex-wrap items-center">
+          <select value={galleryCategory} onChange={(e) => setGalleryCategory(e.target.value)} className="border px-3 py-2 rounded-sm text-sm">
+            <option>Field Survey</option>
+            <option>Site Progress</option>
+            <option>Aerial / Drone</option>
+            <option>Community</option>
+          </select>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={galleryFeature} onChange={(e) => setGalleryFeature(e.target.checked)} />
+            Set as Photo of the Week
+          </label>
+        </div>
+        <button disabled={galleryUploading || !galleryFile || !galleryCaption} className="px-5 py-2.5 rounded-sm text-sm font-semibold disabled:opacity-50" style={{ background: "#B5652D", color: "#fff" }}>
+          {galleryUploading ? "Uploading…" : "Upload photo"}
+        </button>
+      </form>
+
+      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+        {galleryPhotos.map((p) => (
+          <div key={p.id} className="relative rounded-lg overflow-hidden" style={{ aspectRatio: "4/3" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={p.url} alt={p.caption} className="w-full h-full object-cover" />
+            {p.isPhotoOfTheWeek && (
+              <span className="absolute top-2 left-2 text-[10px] px-2 py-1 rounded-full font-semibold" style={{ background: "#EAB308", color: "#14181C" }}>
+                Photo of the Week
+              </span>
+            )}
+            <button
+              onClick={() => deleteGalleryPhoto(p.id)}
+              className="absolute top-2 right-2 w-7 h-7 rounded-full text-sm font-bold"
+              style={{ background: "#E1553Fcc", color: "#fff" }}
+            >
+              ×
+            </button>
+            <div className="absolute inset-x-0 bottom-0 p-2 text-xs" style={{ background: "linear-gradient(180deg, transparent, #14181Cdd)", color: "#fff" }}>
+              {p.caption}
             </div>
           </div>
         ))}

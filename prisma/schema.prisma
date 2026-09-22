@@ -116,6 +116,15 @@ model CorrectionRequest {
   createdAt        DateTime      @default(now())
 }
 
+model GalleryPhoto {
+  id               String   @id @default(cuid())
+  url              String
+  caption          String
+  category         String
+  isPhotoOfTheWeek Boolean  @default(false)
+  createdAt        DateTime @default(now())
+}
+
 model Holiday {
   id    String   @id @default(cuid())
   date  DateTime @unique @db.Date
