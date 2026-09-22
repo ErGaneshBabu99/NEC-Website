@@ -1,0 +1,165 @@
+// Database: Postgres (works with Cloudflare-fronted Neon/Supabase, or Cloudflare D1 via
+// the Prisma D1 driver adapter — swap the "provider" below if you go with D1 instead).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // pooled connection (port 6543) — used by the app at runtime
+  directUrl = env("DIRECT_URL")     // direct connection (port 5432) — used by `prisma migrate`
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  LEAVE
+  HALF_DAY
+}
+
+enum InternshipType {
+  SELF_PAID
+  SKILL
+  PAID
+}
+
+enum CollegeStatus {
+  STUDYING
+  PASSED_OUT
+}
+
+model Employee {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  phone        String
+  photoUrl     String?
+  bloodGroup   String?
+  gender       Gender?
+  position     String?
+  birthDate    DateTime?
+  joinDate     DateTime     @default(now())
+  passwordHash String
+  role         Role         @default(EMPLOYEE)
+  active       Boolean      @default(true)
+  attendance   Attendance[]
+  leaveRequests      LeaveRequest[]
+  correctionRequests CorrectionRequest[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Attendance {
+  id            String            @id @default(cuid())
+  employee      Employee          @relation(fields: [employeeId], references: [id])
+  employeeId    String
+  date          DateTime          @db.Date
+  timeIn        DateTime?
+  timeOut       DateTime?
+  status        AttendanceStatus  @default(PRESENT)
+  lateMinutes   Int               @default(0)
+  earlyMinutes  Int               @default(0)
+  createdAt     DateTime          @default(now())
+
+  @@unique([employeeId, date])
+}
+
+// Standing threshold used to flag an attendance row as LATE / early-leave.
+// Kept as a single-row settings table so admin can change it without a redeploy.
+model AttendanceSettings {
+  id                 String  @id @default("singleton")
+  workStartTime      String  @default("10:00") // "HH:mm" in Asia/Kathmandu
+  workEndTime        String  @default("17:00")
+  lateAlertEmail1    String?
+  lateAlertEmail2    String?
+  consecutiveLateDaysForAlert Int @default(3)
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model LeaveRequest {
+  id         String        @id @default(cuid())
+  employee   Employee      @relation(fields: [employeeId], references: [id])
+  employeeId String
+  startDate  DateTime      @db.Date
+  endDate    DateTime      @db.Date
+  reason     String
+  status     RequestStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+}
+
+model CorrectionRequest {
+  id               String        @id @default(cuid())
+  employee         Employee      @relation(fields: [employeeId], references: [id])
+  employeeId       String
+  date             DateTime      @db.Date
+  requestedTimeOut DateTime
+  reason           String
+  status           RequestStatus @default(PENDING)
+  createdAt        DateTime      @default(now())
+}
+
+model Holiday {
+  id    String   @id @default(cuid())
+  date  DateTime @unique @db.Date
+  label String
+}
+
+model Vacancy {
+  id          String    @id @default(cuid())
+  title       String
+  description String
+  isOpen      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+}
+
+model JobApplication {
+  id            String        @id @default(cuid())
+  vacancyId     String?
+  name          String
+  age           Int
+  phone         String
+  email         String
+  collegeName   String
+  collegeStatus CollegeStatus
+  cvUrl         String
+  createdAt     DateTime      @default(now())
+}
+
+model InternApplication {
+  id            String         @id @default(cuid())
+  name          String
+  age           Int
+  phone         String
+  email         String
+  collegeName   String
+  collegeStatus CollegeStatus
+  type          InternshipType
+  cvUrl         String
+  createdAt     DateTime       @default(now())
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String   // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
+}

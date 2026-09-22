@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/attendance/cron-check", "schedule": "30 11 * * *" },
+    { "path": "/api/birthdays/cron-check", "schedule": "15 4 * * *" }
+  ]
+}
